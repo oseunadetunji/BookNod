@@ -17,7 +17,7 @@ command = "node build.mjs"
 # and paste its ID below.
 [[kv_namespaces]]
 binding = "BOOKNOD_KV"
-id = "booknod"
+id = "c38db6f083984562a06165f7f6f7ba37"
 
 [observability]
 enabled = true
