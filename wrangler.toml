@@ -1,0 +1,23 @@
+# BookNod on Cloudflare Workers.
+# Settings and secrets live in your Cloudflare dashboard (Settings → Variables and Secrets), not here,
+# so this file is safe to keep in a public repository. See README.md for the list.
+name = "booknod"
+main = "dist/worker.js"
+compatibility_date = "2026-06-01"
+
+# Keep the variables set in the dashboard when deploying from the command line or GitHub.
+keep_vars = true
+
+# Bundles public/ into dist/worker.js before every deploy.
+[build]
+command = "node build.mjs"
+
+# Storage for free checks, passes, saved ratings and stats.
+# Create one with: npx wrangler kv namespace create BOOKNOD_KV   (or in the dashboard under Storage & Databases → KV)
+# and paste its ID below.
+[[kv_namespaces]]
+binding = "BOOKNOD_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[observability]
+enabled = true

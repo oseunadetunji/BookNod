@@ -1,0 +1,19 @@
+{
+  "name": "booknod",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Check a children's book against your family's own content rules. Scan, get a Read or Skip.",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs && wrangler dev --var MOCK:1",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
