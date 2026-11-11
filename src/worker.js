@@ -8,7 +8,7 @@
 // Payments:  STRIPE_SECRET_KEY (secret; restricted key with Checkout Sessions + Subscriptions read),
 //            PASS_YEARLY_URL/PRICE, PASS_MONTHLY_URL/PRICE, PASS_SAVINGS, MANAGE_URL,
 //            PACK_URL/PRICE/CHECKS, COMP_CODES ("CODE" or "CODE:200"; 8+ characters).
-// Limits:    FREE_PER_DAY (1), RATE_LIMIT_PER_HOUR (40), IP_LIMIT_PER_HOUR (60), DAILY_CAP, CHECK_LIMITER binding.
+// Limits:    FREE_PER_DAY (1), FIRST_DAY_FREE (3, a new phone's first day), RATE_LIMIT_PER_HOUR (40), IP_LIMIT_PER_HOUR (60), DAILY_CAP, CHECK_LIMITER binding.
 // Bot check: TURNSTILE_SITE_KEY + TURNSTILE_SECRET (secret).
 // Other:     MODEL, TIP_URL, CONTACT_EMAIL, OPERATOR, STATS_KEY (secret, 12+ characters), PARTNERS_JSON.
 // Local testing only: MOCK=1 returns sample ratings and fakes payments. Never set it on a live site.
@@ -73,6 +73,8 @@ export default {
         if (Number(request.headers.get('content-length') || 0) > 3_000_000) return json({ error: 'bad_request' }, 413);
         const body = await request.json().catch(() => ({}));
         if (p === '/api/check') return await check(request, body, env, ctx, url);
+        if (p === '/api/report') return await report(request, body, env);
+        if (p === '/api/stats/clear') return await statsClear(request, body, env, url);
         if (p === '/api/pass/claim') return await claimPass(body, env, ctx);
         if (p === '/api/pass/redeem') return await redeemPass(request, body, env, ctx);
         return json({ error: 'not_found' }, 404);
@@ -81,7 +83,7 @@ export default {
         return json({ error: 'busy' }, 500);
       }
     }
-    return serveAsset(p);
+    return serveAsset(p, url.origin);
   },
 };
 
@@ -89,12 +91,13 @@ export default {
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
-function serveAsset(path) {
+function serveAsset(path, origin) {
   if (path === '/') path = '/index.html';
   if (path === '/privacy' || path === '/terms') path = '/privacy.html';
   if (path === '/stats') path = '/stats.html';
   const a = ASSETS[path] || ASSETS['/index.html']; // partner links like /mylib get the app too
-  const body = a.b64 ? Uint8Array.from(atob(a.body), c => c.charCodeAt(0)) : a.body;
+  // Link previews need full addresses, so pages say __ORIGIN__ and get this site's address here.
+  const body = a.b64 ? Uint8Array.from(atob(a.body), c => c.charCodeAt(0)) : a.type.startsWith('text/html') ? a.body.replaceAll('__ORIGIN__', origin) : a.body;
   return new Response(body, { headers: {
     'content-type': a.type,
     'cache-control': path === '/sw.js' || a.type.startsWith('text/html') ? 'no-cache' : 'public, max-age=86400',
@@ -132,7 +135,7 @@ function config(url, env, request) {
   const P = slug ? partners(env)[slug] : null;
   return json({
     turnstileSiteKey: env.TURNSTILE_SECRET ? (env.TURNSTILE_SITE_KEY || '') : '',
-    freePerDay: parseInt(env.FREE_PER_DAY || '1', 10),
+    freePerDay: parseInt(env.FREE_PER_DAY || '1', 10), firstDayFree: firstDayFree(env),
     plans: [
       env.PASS_YEARLY_URL || env.PASS_URL ? { id: 'yearly', url: env.PASS_YEARLY_URL || env.PASS_URL, price: env.PASS_YEARLY_PRICE || env.PASS_PRICE || '', note: env.PASS_SAVINGS || '' } : null,
       env.PASS_MONTHLY_URL ? { id: 'monthly', url: env.PASS_MONTHLY_URL, price: env.PASS_MONTHLY_PRICE || '', note: '' } : null,
@@ -313,7 +316,14 @@ async function check(request, body, env, ctx, url) {
   if (image && (image.length > 2_000_000 || !/^[A-Za-z0-9+/=]+$/.test(image.slice(0, 200)))) return json({ error: 'bad_image' }, 400);
 
   // 4. Who pays for this check: a partner, a Family Pass, or today's free allowance.
-  const free = parseInt(env.FREE_PER_DAY || '1', 10);
+  //    A phone gets more free checks on its first day (FIRST_DAY_FREE), then FREE_PER_DAY.
+  const baseFree = parseInt(env.FREE_PER_DAY || '1', 10);
+  let free = baseFree;
+  if (env.BOOKNOD_KV) {
+    const first = await kvGet(env, 'first:' + deviceId);
+    if (!first) await kvPut(env, 'first:' + deviceId, day, 400 * 86400);
+    if (!first || first === day) free = Math.max(baseFree, firstDayFree(env));
+  }
   const usedKey = `a:${day}:${deviceId}`, ipKey = `ai:${day}:${ipH}`;
   const ppKey = slug ? `pp:${day}:${slug}:${deviceId}` : '', pcKey = slug ? `pc:${day}:${slug}` : '';
   let mode = 'free', used = 0, ipN = 0, ppN = 0, pcN = 0;
@@ -333,9 +343,9 @@ async function check(request, body, env, ctx, url) {
     used = (await kvGet(env, usedKey)) || 0;
     ipN = (await kvGet(env, ipKey)) || 0;
     // Backstop against clearing browser data to reset: generous per-network daily cap.
-    if (used >= free || ipN >= free * 15) {
+    if (used >= free || ipN >= baseFree * 15) {
       if (pk) mode = 'pack';
-      else { bump(env, ctx, { limit: 1 }); return json({ error: 'limit', freePerDay: free }, 402); }
+      else { bump(env, ctx, { limit: 1 }); return json({ error: 'limit', freePerDay: free, allowance: free }, 402); }
     }
   }
   let dayN = 0;
@@ -402,7 +412,8 @@ async function check(request, body, env, ctx, url) {
   // One combined write for this check's counts and (once a day per phone) the phone's insights.
   if (env.BOOKNOD_KV) ctx.waitUntil(phoneFields(env, request, deviceId, !!body.app).then(pf => bumpNow(env, { ...ev, ...pf })).catch(() => {}));
   if (mode === 'pack' && !result.found) ctx.waitUntil(refund());
-  return json({ result, cached, mode, remaining, human, credits: mode === 'pack' ? pk.rec.credits : undefined });
+  return json({ result, cached, mode, remaining, allowance: mode === 'free' ? free : undefined, human, ck: cacheKey || undefined,
+    credits: mode === 'pack' ? pk.rec.credits : undefined });
 }
 
 // ---- Private stats (totals only; no names, emails or exact locations) --------
@@ -450,10 +461,16 @@ function logNotFound(env, ctx, e) {
     await kvPut(env, k, list.slice(0, 200), 30 * 86400);
   })().catch(() => {}));
 }
-async function stats(request, env) {
+const firstDayFree = env => Math.max(0, parseInt(env.FIRST_DAY_FREE || '3', 10));
+async function statsAuth(request, env) {
   const key = request.headers.get('x-stats-key') || '';
   if (!env.STATS_KEY || env.STATS_KEY.length < 12) return json({ error: 'not_configured' }, 404);
   if (key.length !== env.STATS_KEY.length || (await sha(key)) !== (await sha(env.STATS_KEY))) return json({ error: 'forbidden' }, 403);
+  return null;
+}
+async function stats(request, env) {
+  const denied = await statsAuth(request, env);
+  if (denied) return denied;
   const days = [];
   for (let i = 0; i < 30; i++) {
     const d = shiftDay(today(), -i);
@@ -465,8 +482,50 @@ async function stats(request, env) {
     for (const e of ((await kvGet(env, 'nf:' + d)) || [])) notFound.push({ day: d, ...e });
   }
   const num = v => parseFloat(String(v || '').replace(/[^\d.]/g, '')) || 0;
-  return json({ days, notFound, model: env.MODEL || 'claude-sonnet-5-5',
-    prices: { yearly: num(env.PASS_YEARLY_PRICE) || 99.99, monthly: num(env.PASS_MONTHLY_PRICE) || 9.80, pack: num(env.PACK_PRICE) } });
+  const reports = ((await kvGet(env, 'rep:list')) || []).map(({ cks, ...r }) => ({ ...r, clearable: cks.length > 0 }));
+  return json({ days, notFound, reports, model: env.MODEL || 'claude-sonnet-5-5',
+    prices: { yearly: num(env.PASS_YEARLY_PRICE), monthly: num(env.PASS_MONTHLY_PRICE), pack: num(env.PACK_PRICE) } });
+}
+
+// ---- Rating reports ------------------------------------------------------------
+// A parent flags a rating; it appears on the stats page, where "Clear rating" removes the saved answer so the
+// next check asks the AI again. Stores the book, the choice and the note only; nothing about who sent it.
+const REPORT_CHOICES = { wrong_book: 'Wrong book', too_low: 'Rating too low', too_high: 'Rating too high', other: 'Other' };
+async function report(request, body, env) {
+  if (!env.BOOKNOD_KV) return json({ ok: true });
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const rk = `rr:${(await sha(ip)).slice(0, 24)}:${new Date().toISOString().slice(0, 13)}`;
+  const n = (await kvGet(env, rk)) || 0;
+  if (n >= 10) return json({ error: 'too_many' }, 429);
+  await kvPut(env, rk, n + 1, 7200);
+  const title = String(body.title || '').trim().slice(0, 160), author = String(body.author || '').trim().slice(0, 100);
+  const choice = REPORT_CHOICES[body.choice] ? body.choice : 'other';
+  const note = String(body.note || '').trim().slice(0, 300), ck = /^[0-9a-f]{64}$/.test(body.ck || '') ? body.ck : '';
+  if (!title) return json({ error: 'bad_request' }, 400);
+  const list = (await kvGet(env, 'rep:list')) || [];
+  const id = (await sha((title + '|' + author).toLowerCase())).slice(0, 16);
+  let r = list.find(x => x.id === id);
+  if (!r) { r = { id, title, author, count: 0, choices: {}, notes: [], cks: [] }; list.unshift(r); }
+  r.count += 1; r.last = today() + ' ' + torontoHM();
+  r.choices[choice] = (r.choices[choice] || 0) + 1;
+  if (note) r.notes = [note, ...r.notes].slice(0, 5);
+  if (ck && !r.cks.includes(ck)) r.cks = [ck, ...r.cks].slice(0, 20);
+  list.sort((a, b) => (b.last > a.last ? 1 : -1));
+  await kvPut(env, 'rep:list', list.slice(0, 200), 365 * 86400);
+  return json({ ok: true });
+}
+async function statsClear(request, body, env, url) {
+  const denied = await statsAuth(request, env);
+  if (denied) return denied;
+  const list = (await kvGet(env, 'rep:list')) || [];
+  const r = list.find(x => x.id === body.id);
+  if (!r) return json({ error: 'not_found' }, 404);
+  for (const ck of r.cks) {
+    if (env.BOOKNOD_KV) await env.BOOKNOD_KV.delete('r:' + ck);
+    await caches.default.delete(new Request(`${url.origin}/__cache/${ck}`));
+  }
+  await kvPut(env, 'rep:list', list.filter(x => x.id !== r.id), 365 * 86400);
+  return json({ ok: true, cleared: r.cks.length });
 }
 
 // ---- Bot check (Cloudflare Turnstile) ---------------------------------------
