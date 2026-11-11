@@ -7,7 +7,7 @@ BookNod helps parents decide, in seconds, whether a book suits their child. Scan
 > **Just want to use it?** [booknod.ca](https://booknod.ca) is the ready-made version, with nothing to set up.
 > This repository is for people who want to run their own copy.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/OWNER/booknod)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/oseunadetunji/booknod)
 
 ## What it does
 
