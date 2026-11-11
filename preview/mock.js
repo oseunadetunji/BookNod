@@ -32,6 +32,7 @@
       ratings: R({ violence: { level: 1, note: 'Talk of Wilbur being butchered.' }, scary: { level: 1, note: 'Wilbur’s fear of being killed.' }, death: { level: 2, note: 'Charlotte dies near the end, gently handled.' } }) },
   ];
   const day = () => new Date().toISOString().slice(0, 10);
+  const ALLOW = () => { try { return localStorage.getItem('booknod.first') === new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) ? 3 : 1; } catch (e) { return 1; } };
   const used = () => { try { const u = JSON.parse(localStorage.getItem('booknod.preview.used')); return u && u.day === day() ? u.n : 0; } catch (e) { return 0; } };
   const setUsed = n => { try { localStorage.setItem('booknod.preview.used', JSON.stringify({ day: day(), n })); } catch (e) {} };
   const res = (obj, status = 200) => new Promise(ok => setTimeout(() => ok(new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } })), status === 200 && obj.result ? 900 : 150));
@@ -40,11 +41,11 @@
     const u = String(typeof input === 'string' ? input : input.url);
     if (!u.startsWith('/api/')) return realFetch(input, init);
     const body = init.body ? JSON.parse(init.body) : {};
-    if (u.startsWith('/api/config')) return res({ freePerDay: 1, tipUrl: 'https://ko-fi.com', manageUrl: 'https://billing.stripe.com',
-      plans: [{ id: 'yearly', url: '?session_id=test_preview_yearly', price: '$99.99/year', note: 'Save 15%' },
-              { id: 'monthly', url: '?session_id=test_preview_monthly', price: '$9.80/month', note: '' }],
-      pack: { url: '?session_id=test_preview_pack', price: '$2.99', checks: 10 },
+    if (u.startsWith('/api/config')) return res({ freePerDay: 1, firstDayFree: 3, tipUrl: 'https://ko-fi.com', manageUrl: 'https://billing.stripe.com',
+      plans: [{ id: 'yearly', url: '?session_id=test_preview_yearly', price: '$49.99/year', note: 'Save 16%' },
+              { id: 'monthly', url: '?session_id=test_preview_monthly', price: '$4.99/month', note: '' }],
       partner: PARTNER ? PARTNERS[PARTNER] : null });
+    if (u === '/api/report') return res({ ok: true });
     if (u === '/api/pass/claim' || u === '/api/pass/redeem') {
       if (u === '/api/pass/redeem' && !/^NOD/i.test(String(body.code).replace(/\W/g, ''))) return res({ error: 'bad_code' }, 404);
       const sid = String(body.session_id || '');
@@ -57,7 +58,7 @@
       let packLeft = null;
       if (isPack) { const ps = JSON.parse(localStorage.getItem('booknod.pass') || '{}'); packLeft = ps.credits || 0; }
       const pass = !!body.pass && (!isPack || packLeft > 0 || used() < 1), partner = !!PARTNER;
-      if (!pass && !partner && used() >= 1) return res({ error: 'limit', freePerDay: 1 }, 402);
+      if (!pass && !partner && used() >= ALLOW()) return res({ error: 'limit', freePerDay: ALLOW(), allowance: ALLOW() }, 402);
       const q = String(body.q || '').toLowerCase();
       let b = body.isbn || body.image ? BOOKS.find(x => x.isbn) : BOOKS.find(x => x.k.some(k => q.includes(k)));
       let result;
@@ -66,10 +67,10 @@
         summary: 'Preview with sample ratings. The live app rates the real book. Try Wonder, Dog Man, The Hunger Games or Harry Potter.',
         ratings: R({ violence: { level: 1, note: 'Sample rating for the preview.' } }) };
       result.custom = body.custom ? { query: body.custom, present: !!(b && b.magic && /magic|witch|wizard/i.test(body.custom)), note: b && b.magic && /magic|witch|wizard/i.test(body.custom) ? 'Magic and wizardry are central to the story.' : '' } : null;
-      let remaining = null, mode = partner ? 'partner' : (pass && !isPack) ? 'pass' : (isPack && used() >= 1) ? 'pack' : 'free';
-      if (mode === 'free') { setUsed(used() + 1); remaining = Math.max(0, 1 - used()); }
+      let remaining = null, mode = partner ? 'partner' : (pass && !isPack) ? 'pass' : (isPack && used() >= ALLOW()) ? 'pack' : 'free';
+      if (mode === 'free') { setUsed(used() + 1); remaining = Math.max(0, ALLOW() - used()); }
       if (mode === 'pack') { packLeft -= 1; window.__packLeft = packLeft; }
-      return res({ result, mode, remaining, credits: mode === 'pack' ? packLeft : undefined });
+      return res({ result, mode, remaining, allowance: mode === 'free' ? ALLOW() : undefined, ck: 'a'.repeat(64), credits: mode === 'pack' ? packLeft : undefined });
     }
     return res({ error: 'not_found' }, 404);
   };
