@@ -60,7 +60,7 @@ npm run dev        # http://localhost:8787, sample ratings, fake payments (MOCK=
 
 ## Settings
 
-All settings live in the Cloudflare dashboard (**Settings → Variables and Secrets**), never in the code. `keep_vars = true` in `wrangler.toml` keeps them when you redeploy. Only `ANTHROPIC_API_KEY` and the `BOOKNOD_KV` binding are required.
+All settings live in the Cloudflare dashboard, never in the code. `keep_vars = true` in `wrangler.toml` keeps them when you redeploy. Only `ANTHROPIC_API_KEY` and the `BOOKNOD_KV` binding are required.
 
 | Name | Type | What it does |
 | --- | --- | --- |
@@ -69,14 +69,14 @@ All settings live in the Cloudflare dashboard (**Settings → Variables and Secr
 | `FREE_PER_DAY` | Text | Free checks per phone per day (default `1`). Days roll over at midnight in the time zone set by `TZ` in `src/worker.js`. |
 | `FIRST_DAY_FREE` | Text | Free checks on a phone's first day, so new visitors can try it properly (default `3`). |
 | `STRIPE_SECRET_KEY` | Secret | Restricted key with **read** access to Checkout Sessions and Subscriptions. |
-| `PASS_YEARLY_URL`, `PASS_YEARLY_PRICE` | Text | Stripe Payment Link for a yearly subscription, and its button label (e.g. `$50/year`). |
-| `PASS_MONTHLY_URL`, `PASS_MONTHLY_PRICE` | Text | Same for monthly (e.g. `$5/month`). |
+| `PASS_YEARLY_URL`, `PASS_YEARLY_PRICE` | Text | Stripe Payment Link for a yearly subscription, and its button label. |
+| `PASS_MONTHLY_URL`, `PASS_MONTHLY_PRICE` | Text | Same for monthly. |
 | `PASS_SAVINGS` | Text | Optional tag on the yearly button (e.g. `Save 20%`). |
 | `MANAGE_URL` | Text | Stripe customer portal login link, for "Manage or cancel your plan". |
 | `PACK_URL`, `PACK_PRICE`, `PACK_CHECKS` | Text | Pay-as-you-go: a **one-time** Stripe Payment Link, its label and how many checks it adds (default `10`). Any one-time payment is treated as a pack. |
 | `COMP_CODES` | Text | Free pass codes, comma-separated, 8+ characters. `CODE:200` lets a code work on 200 phones (default 5). |
 | `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET` | Text + Secret | Cloudflare Turnstile bot check. Strongly recommended for a public site. Your own domain only. |
-| `RATE_LIMIT_PER_HOUR`, `IP_LIMIT_PER_HOUR` | Text | Checks per phone (40) and per internet address (60) each hour. |
+| `RATE_LIMIT_PER_HOUR`, `IP_LIMIT_PER_HOUR` | Text | Checks per phone and per internet address each hour. |
 | `DAILY_CAP` | Text | Most paid-for checks per day across everyone. |
 | `STATS_KEY` | Secret | Password (12+ characters) for the private stats page at `/stats`. |
 | `TIP_URL` | Text | Tip page link (Ko-fi, Buy Me a Coffee…). |
