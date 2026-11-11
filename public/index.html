@@ -4,7 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>BookNod</title>
-<meta name="description" content="Scan a book and see if it fits your family's reading rules.">
+<meta name="description" content="Scan a book and see in seconds if it fits your family's reading rules: profanity, violence, romance, bullying and more, set for each child.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BookNod">
+<meta property="og:title" content="BookNod: scan a book, get a nod or a no">
+<meta property="og:description" content="Check any children's book against your own rules for each child, right at the library shelf.">
+<meta property="og:url" content="__ORIGIN__/">
+<meta property="og:image" content="__ORIGIN__/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="BookNod: a book stamped READ">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1F5C45">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
@@ -180,6 +190,18 @@ input:focus,textarea:focus{border-color:var(--cloth);outline:none}
 .paywall h3.up{font:800 1rem var(--display);margin:6px 0 -4px;color:var(--ink)}
 .meter.out{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;background:var(--wait-soft);border-radius:10px;padding:10px 12px;color:var(--ink)}
 .meter .more{margin-left:auto;border:0;background:var(--cloth);color:var(--cloth-ink);font:inherit;font-weight:700;font-size:.9rem;border-radius:999px;padding:8px 14px;cursor:pointer}
+.welcome{border:2px solid var(--cloth)}
+.welcome h2{font:800 1.25rem/1.2 var(--display);margin:0}
+.welcome p{margin:0;color:var(--muted)}
+.welcome .linkbtn{padding:12px 8px}
+.report{padding:2px 16px 12px}
+.reportlink{border:0;background:none;color:var(--muted);text-decoration:underline;font:inherit;font-size:.88rem;padding:6px 0;cursor:pointer}
+.reportform{display:flex;flex-direction:column;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 11px;font:inherit;font-size:.86rem;cursor:pointer}
+.chip.on{border-color:var(--cloth);background:var(--cloth);color:var(--cloth-ink);font-weight:700}
+.reportform textarea{border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:.95rem;min-height:60px;resize:vertical}
+.thanks{margin:0;color:var(--go);font-weight:700;font-size:.92rem}
 .linkbtn{border:0;background:none;color:var(--cloth);font-weight:700;text-decoration:underline;padding:6px}
 .libbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 16px 14px;padding:12px;border-radius:12px;background:var(--cloth);color:var(--cloth-ink);font-weight:700;text-decoration:none}
 .passbox{display:flex;flex-direction:column;gap:10px}
@@ -206,6 +228,19 @@ input:focus,textarea:focus{border-color:var(--cloth);outline:none}
   <!-- CHECK TAB -->
   <main id="tab-check" class="wrap" style="gap:18px">
     <div class="banner" id="demoBanner" hidden></div>
+    <section class="panel welcome" id="welcome" hidden>
+      <h2>Who's reading?</h2>
+      <p>BookNod checks each book against rules for a specific child. Tell us who's reading and we'll start with rules that suit their age. You can fine-tune them any time.</p>
+      <form id="welcomeForm" class="row reader-row">
+        <div class="field" style="flex:1;min-width:0"><label class="lbl" for="wName">Name</label><input id="wName" maxlength="24" placeholder="e.g. Ava" autocomplete="off"></div>
+        <div class="field" style="width:96px"><label class="lbl" for="wAge">Age</label><input id="wAge" type="number" inputmode="numeric" min="1" max="18" placeholder="8"></div>
+      </form>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-main" id="wSave">Set up reader</button>
+        <button type="button" class="linkbtn" id="wSkip">Skip for now</button>
+      </div>
+      <p class="hint" style="margin:0">Names and ages stay on this phone. They're never sent to us.</p>
+    </section>
     <section class="panel">
       <button class="btn btn-scan" id="scanBtn" type="button">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>
@@ -300,14 +335,17 @@ function packButton(label){
   if(!CFG.pack)return '';
   return `<a class="btn btn-ghost plan" href="${esc(CFG.pack.url)}"><span>${esc(label||`${CFG.pack.checks} checks`)}${CFG.pack.price?' · '+esc(CFG.pack.price):''}</span><span class="save">No subscription</span></a>`;
 }
-function getDevice(){try{let d=localStorage.getItem('booknod.device');if(!d){d=crypto.getRandomValues(new Uint32Array(4)).join('').slice(0,24);localStorage.setItem('booknod.device',d)}return d}catch(e){return ''}}
+function getDevice(){try{let d=localStorage.getItem('booknod.device');if(!d){d=crypto.getRandomValues(new Uint32Array(4)).join('').slice(0,24);localStorage.setItem('booknod.device',d);localStorage.setItem('booknod.first',new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()))}return d}catch(e){return ''}}
 const DEVICE=getDevice();
 // Renewing plans stay on until the server reports they've lapsed (a check comes back as a free check).
 function getPass(){try{const p=JSON.parse(localStorage.getItem('booknod.pass'));if(p&&(p.renews||p.expires>Date.now()))return p}catch(e){}return null}
 function setPass(p){try{p?localStorage.setItem('booknod.pass',JSON.stringify(p)):localStorage.removeItem('booknod.pass')}catch(e){}}
 const torontoDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-let remaining=null; try{const m=JSON.parse(localStorage.getItem('booknod.left'));if(m&&m.day===torontoDay())remaining=m.n}catch(e){}
-function setRemaining(n){remaining=n;try{localStorage.setItem('booknod.left',JSON.stringify({day:torontoDay(),n}))}catch(e){}renderMeter()}
+let remaining=null, allowance=null; try{const m=JSON.parse(localStorage.getItem('booknod.left'));if(m&&m.day===torontoDay()){remaining=m.n;allowance=m.f||null}}catch(e){}
+function isFirstDay(){try{return localStorage.getItem('booknod.first')===torontoDay()}catch(e){return false}}
+// Today's free checks: what the server last said, else a new phone's first-day allowance, else the daily one.
+function freeToday(){return allowance||(isFirstDay()&&CFG.firstDayFree?Math.max(CFG.firstDayFree,CFG.freePerDay):CFG.freePerDay)}
+function setRemaining(n,f){remaining=n;if(f)allowance=f;try{localStorage.setItem('booknod.left',JSON.stringify({day:torontoDay(),n,f:allowance}))}catch(e){}renderMeter()}
 function toast(t){const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.appendChild(el);setTimeout(()=>el.remove(),2600)}
 function renderMeter(){
   const m=$('meter');
@@ -315,16 +353,16 @@ function renderMeter(){
   const ps=getPass();
   if(ps&&ps.plan==='pack'){m.hidden=false;m.className='meter pass';m.textContent=`Check pack: ${ps.credits} check${ps.credits===1?'':'s'} left`;return}
   if(ps){m.hidden=false;m.className='meter pass';m.textContent='Family Pass: unlimited checks';return}
-  const n=remaining==null?CFG.freePerDay:remaining, f=CFG.freePerDay;
+  const f=freeToday(), n=remaining==null?f:Math.min(remaining,f);
   m.hidden=false;m.className='meter';
-  m.innerHTML=`<span class="pips">${Array.from({length:f},(_,i)=>`<i class="${i<n?'':'used'}"></i>`).join('')}</span><span>${f===1?(n?'1 free check left today':'Today\'s free check is used'):`${n} of ${f} free checks left today`}</span>`;
+  m.innerHTML=`<span class="pips">${Array.from({length:f},(_,i)=>`<i class="${i<n?'':'used'}"></i>`).join('')}</span><span>${f===1?(n?'1 free check left today':'Today\'s free check is used'):!n?'Today\'s free checks are used':`${n} of ${f} free checks left today`}</span>`;
   if(!n){m.classList.add('out');m.insertAdjacentHTML('beforeend','<button type="button" class="more" id="getMore">Get more checks <span aria-hidden="true">→</span></button>');$('getMore').onclick=()=>{renderPaywall();$('resultArea').scrollIntoView({behavior:'smooth',block:'start'})}}
 }
 function renderPaywall(){
   const tip=CFG.tipUrl?`<a class="tip" href="${esc(CFG.tipUrl)}" target="_blank" rel="noopener">Not ready to buy? <b>Leave a tip</b> to keep BookNod running</a>`:'';
   $('resultArea').innerHTML=`<div class="paywall">
-    <h2>That's today's ${CFG.freePerDay===1?'free check':CFG.freePerDay+' free checks'}</h2>
-    <p>${CFG.freePerDay===1?'Your free check refreshes':'Free checks refresh'} tomorrow.</p>
+    <h2>That's today's ${freeToday()===1?'free check':freeToday()+' free checks'}</h2>
+    <p>${CFG.freePerDay===1?'You get a free check':'You get '+CFG.freePerDay+' free checks'} each day. ${CFG.freePerDay===1?'It refreshes':'They refresh'} tomorrow.</p>
     <h3 class="up">Upgrade for more checks</h3>
     <p>Family Pass: unlimited checks on up to 5 family phones. Cancel anytime.</p>
     ${planButtons()}
@@ -463,9 +501,12 @@ function renderResult(entry,fresh){
     ${alts.length?`<div class="alts">Meant a different book? ${alts.map(a=>`<button type="button" data-alt="${esc(a)}">${esc(a)}</button>`).join('')}</div>`:''}
     ${r.found&&CFG.partner&&CFG.partner.catalogue?`<a class="libbtn" target="_blank" rel="noopener" href="${esc(CFG.partner.catalogue.replace('{q}',encodeURIComponent([r.title,r.author].filter(Boolean).join(' '))))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg>Find it at ${esc(CFG.partner.short||CFG.partner.name)}</a>`:''}
     ${customStale&&!entry.example&&entry.q?`<div class="alts"><button type="button" id="recheck">Check again</button></div>`:''}
+    ${r.found&&!entry.example?(entry.reported?'<div class="report"><p class="thanks">Thanks. We\'ll review this rating and fix it if it\'s wrong.</p></div>'
+      :'<div class="report" id="reportBox"><button type="button" class="reportlink" id="reportOpen">Something look wrong? Report this rating</button></div>'):''}
     <div class="res-foot">${entry.example?'This is a sample. Scan or type a book to check a real one. ':''}Ratings are auto generated from what's known about the book and can miss things.</div>
   </article>`;
   area.querySelectorAll('[data-alt]').forEach(b=>b.onclick=()=>{$('q').value=b.dataset.alt;check({q:b.dataset.alt})});
+  const ro=$('reportOpen'); if(ro) ro.onclick=()=>openReport(entry);
   const rc=$('recheck'); if(rc) rc.onclick=()=>check({q:entry.q,isbn:entry.isbn});
 }
 
@@ -532,14 +573,14 @@ async function check({q='',isbn='',image=null}={}){
       res=await send(t); data=await res.json().catch(()=>({}));
     }
     if(data.human) setHuman(data.human);
-    if(res.status===402&&data.error==='limit'){setRemaining(0);if(getPass()&&getPass().plan==='pack')setPass(null);renderMeter();renderPaywall();return}
+    if(res.status===402&&data.error==='limit'){setRemaining(0,data.allowance);if(getPass()&&getPass().plan==='pack')setPass(null);renderMeter();renderPaywall();return}
     if(!res.ok) throw {code:data.error||'busy'};
     if(PARTNER_SLUG&&CFG.partner&&CFG.partner.unlimited&&data.mode!=='partner'){CFG.partner.unlimited=false;renderMeter()}
-    if(data.mode==='free'&&typeof data.remaining==='number') setRemaining(data.remaining);
+    if(data.mode==='free'&&typeof data.remaining==='number') setRemaining(data.remaining,data.allowance);
     if(data.mode==='pack'&&getPass()){const ps=getPass();ps.credits=data.credits;setPass(ps);renderMeter()}
     if(data.mode==='free'&&getPass()&&getPass().plan!=='pack'){setPass(null);renderMeter()} // pass no longer valid on this phone
     const r=data.result; r.ratings=r.ratings||{};
-    const entry={q:q||(r.found?r.title:label),isbn,result:r,at:Date.now()};
+    const entry={q:q||(r.found?r.title:label),isbn,result:r,at:Date.now(),ck:data.ck||''};
     current=entry;
     if(r.found){S.history=[entry,...S.history.filter(h=>!(h.result.found&&h.result.title===r.title&&h.result.author===r.author))].slice(0,25);save()}
     renderResult(entry,true);renderRecent();
@@ -547,6 +588,30 @@ async function check({q='',isbn='',image=null}={}){
     if(e&&e.name==='AbortError'){renderResult(current,false)}
     else $('resultArea').innerHTML=`<div class="result"><div class="why w-check">${esc(ERR[e?.code]||"Couldn't reach BookNod. Check your connection and try again.")}</div></div>`;
   }finally{$('go').disabled=false}
+}
+
+/* ---------- Report a rating ---------- */
+const REPORT_CHOICES=[['wrong_book','Wrong book'],['too_low','A rating is too low'],['too_high','A rating is too high'],['other','Other']];
+function openReport(entry){
+  const box=$('reportBox'); if(!box) return;
+  let choice='';
+  box.innerHTML=`<div class="reportform"><b id="repQ">What's off?</b>
+    <div class="chips" role="radiogroup" aria-labelledby="repQ">${REPORT_CHOICES.map(([k,l])=>`<button type="button" class="chip" role="radio" aria-checked="false" data-c="${k}">${l}</button>`).join('')}</div>
+    <label for="repNote" hidden>Tell us more</label><textarea id="repNote" maxlength="300" placeholder="Optional: tell us more, e.g. bullying is a big theme"></textarea>
+    <span class="hint" id="repMsg"></span>
+    <div class="row" style="gap:8px"><button type="button" class="btn btn-main" id="repSend">Send report</button><button type="button" class="btn btn-ghost" id="repCancel">Cancel</button></div></div>`;
+  box.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{choice=b.dataset.c;box.querySelectorAll('[data-c]').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-checked',String(x===b))})});
+  $('repCancel').onclick=()=>renderResult(entry,false);
+  $('repSend').onclick=async()=>{
+    if(!choice){$('repMsg').textContent="Pick what's off first.";return}
+    $('repSend').disabled=true;$('repMsg').textContent='Sending…';
+    try{const r=entry.result;
+      const res=await fetch('/api/report',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title:r.title,author:r.author,choice,note:$('repNote').value,ck:entry.ck||''})});
+      if(!res.ok) throw 0;
+      entry.reported=true;save();renderResult(entry,false);
+    }catch(e){$('repSend').disabled=false;$('repMsg').textContent="Couldn't send that. Check your connection and try again."}
+  };
+  box.querySelector('[data-c]').focus();
 }
 
 /* ---------- Scanner ---------- */
@@ -638,6 +703,21 @@ $('editRules').onclick=()=>showTab('rules');
 $('whoBtn').onclick=()=>{if(S.profiles.length>1){const i=S.profiles.findIndex(p=>p.id===S.active);S.active=S.profiles[(i+1)%S.profiles.length].id;save();refresh();toast(`Now checking for ${prof().name}`);if(!$('tab-rules').hidden)renderRulesTab()}else showTab('rules')};
 $('form').onsubmit=e=>{e.preventDefault();$('q').blur();check({q:$('q').value})};
 $('clearHist').onclick=()=>{S.history=[];save();current=EXAMPLE;refresh()};
+
+/* ---------- First visit: who's reading? ---------- */
+if(S.onboarded===undefined){const k=prof();S.onboarded=!!(S.history.length||S.profiles.length>1||k.age||k.name!=='My reader');save()}
+function renderWelcome(){$('welcome').hidden=!!S.onboarded}
+$('wSave').onclick=()=>{
+  const k=prof(),name=$('wName').value.trim(),age=parseInt($('wAge').value,10);
+  if(!name&&!age){$('wName').focus();return}
+  if(name)k.name=name.slice(0,24);
+  if(age>0&&age<=18){k.age=age;k.limits={...PRESETS[presetForAge(age)]}}
+  S.onboarded=true;save();renderWelcome();refresh();
+  toast(`Rules set for ${k.name}${k.age?' (age '+k.age+')':''}. Change them on the Rules tab.`);
+};
+$('wSkip').onclick=()=>{S.onboarded=true;save();renderWelcome()};
+$('welcomeForm').onsubmit=e=>{e.preventDefault();$('wSave').click()};
+renderWelcome();
 
 refresh();
 renderMeter();

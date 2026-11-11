@@ -41,6 +41,9 @@ h2{font:800 1.1rem var(--display);margin:0 0 10px}
 .bd li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bd li b{font-variant-numeric:tabular-nums}
 .bd li i{grid-column:1/-1;height:4px;border-radius:2px;background:var(--cloth);opacity:.55}
+.tagr{display:inline-block;font:600 .7rem var(--mono);background:var(--paper);color:var(--stop);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:1px 0;white-space:nowrap}
+.clr{border:0;border-radius:999px;padding:7px 12px;background:var(--cloth);color:var(--paper);font:inherit;font-weight:700;font-size:.82rem;cursor:pointer;white-space:nowrap}
+.clr:disabled{opacity:.6}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
 .legend{display:flex;gap:16px;font-size:.85rem;color:var(--muted);margin-bottom:6px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
@@ -95,6 +98,11 @@ form.key button{border:0;border-radius:10px;padding:10px 16px;background:var(--c
     <button type="button" class="linkbtn" id="forget">Forget key on this device</button>
   </section>
   <section class="panel" style="margin-top:18px">
+    <h2>Reported ratings</h2>
+    <p class="note">Parents flagged these. <b>Clear rating</b> deletes the saved answer, so the next check asks the AI again. If the rating still looks wrong after that, the AI may simply not know the book well.</p>
+    <div class="scroll"><table id="repTable"></table></div>
+  </section>
+  <section class="panel" style="margin-top:18px">
     <h2>Books not found, last 7 days</h2>
     <p class="note" id="nfSummary"></p>
     <div class="scroll"><table id="nfTable"></table></div>
@@ -105,8 +113,8 @@ form.key button{border:0;border-radius:10px;padding:10px 16px;background:var(--c
 <script>
 const $=id=>document.getElementById(id);
 const COST_TEXT=0.007, COST_PHOTO=0.01;
-let PRICES={yearly:99.99,monthly:9.80,pack:0};
-let days=[], range=7, notFound=[];
+let PRICES={yearly:0,monthly:0,pack:0};
+let days=[], range=7, notFound=[], reports=[];
 const getKey=()=>{try{return localStorage.getItem('booknod.statskey')||''}catch(e){return ''}};
 const setKey=k=>{try{k?localStorage.setItem('booknod.statskey',k):localStorage.removeItem('booknod.statskey')}catch(e){}};
 const n=(d,f)=>d[f]||0;
@@ -121,7 +129,7 @@ async function load(){
     if(r.status===403){setKey('');showErr('That key is wrong. Check STATS_KEY in Cloudflare.');return}
     if(r.status===404){showErr('Stats aren\'t set up yet. Add a STATS_KEY secret (12+ characters) in Cloudflare and deploy.');return}
     if(!r.ok) throw 0;
-    const data=await r.json(); if(data.prices)PRICES=data.prices; days=data.days.reverse(); notFound=data.notFound||[];
+    const data=await r.json(); if(data.prices)PRICES=data.prices; days=data.days.reverse(); notFound=data.notFound||[]; reports=data.reports||[];
     $('login').hidden=true;$('dash').hidden=false;render();
   }catch(e){showErr("Couldn't load stats. Check your connection and reload.")}
 }
@@ -166,7 +174,7 @@ function render(){
     ['Sales',fmt(py+pm+pp),`${fmt(py)} yearly · ${fmt(pm)} monthly · ${fmt(pp)} packs · ${money(py*PRICES.yearly+pm*PRICES.monthly+pp*PRICES.pack)} CAD new`],
     ['Blocked',fmt(sum(list,'botblocked')+sum(list,'ratelimited')),`${fmt(sum(list,'botblocked'))} failed bot check · ${fmt(sum(list,'ratelimited'))} over limits`],
   ].map(([l,b,s])=>`<div class="tile"><div class="lbl">${l}, ${label}</div><div class="big">${b}</div><div class="sub">${s}</div></div>`).join('');
-  drawPeople(list);drawChart();drawTable();drawNotFound();
+  drawPeople(list);drawChart();drawTable();drawNotFound();drawReports();
 }
 function drawChart(){
   const W=900,H=220,L=36,R=8,T=10,B=28, w=(W-L-R)/days.length;
@@ -190,6 +198,22 @@ function drawTable(){
   $('table').innerHTML=`<thead><tr>${cols.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead><tbody>${rows.map(d=>`<tr>${cols.map(([,f])=>`<td>${f==='day'?d.day:(n(d,f)||'·')}</td>`).join('')}</tr>`).join('')}</tbody>`;
 }
 const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CHOICE={wrong_book:'Wrong book',too_low:'Rating too low',too_high:'Rating too high',other:'Other'};
+function drawReports(){
+  if(!reports.length){$('repTable').innerHTML='<tbody><tr><td class="note" style="text-align:left">No reports. Good news.</td></tr></tbody>';return}
+  $('repTable').innerHTML=`<thead><tr><th>Last report</th><th>Book</th><th>What's off</th><th>Notes</th><th></th></tr></thead><tbody>${reports.map(r=>`<tr>
+    <td>${escH(r.last||'')}</td>
+    <td style="text-align:left;white-space:normal"><b>${escH(r.title)}</b><br><span class="note">${escH(r.author||'')}${r.author?' · ':''}${r.count} report${r.count===1?'':'s'}</span></td>
+    <td style="text-align:left;white-space:normal">${Object.entries(r.choices||{}).map(([k,v])=>`<span class="tagr">${escH(CHOICE[k]||k)}${v>1?' ×'+v:''}</span>`).join(' ')}</td>
+    <td style="text-align:left;white-space:normal">${(r.notes||[]).map(escH).join('<br>')||'·'}</td>
+    <td><button type="button" class="clr" data-id="${escH(r.id)}">${r.clearable?'Clear rating':'Dismiss'}</button></td></tr>`).join('')}</tbody>`;
+  $('repTable').querySelectorAll('.clr').forEach(b=>b.onclick=async()=>{
+    b.disabled=true;b.textContent='Clearing…';
+    try{const r=await fetch('/api/stats/clear',{method:'POST',headers:{'content-type':'application/json','x-stats-key':getKey()},body:JSON.stringify({id:b.dataset.id})});
+      if(!r.ok)throw 0;reports=reports.filter(x=>x.id!==b.dataset.id);drawReports();
+    }catch(e){b.disabled=false;b.textContent='Try again'}
+  });
+}
 function drawNotFound(){
   const by={typed:0,barcode:0,photo:0}, noLib=notFound.filter(e=>e.how==='barcode'&&!e.lib).length;
   notFound.forEach(e=>by[e.how]=(by[e.how]||0)+1);
