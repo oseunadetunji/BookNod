@@ -7,7 +7,7 @@ BookNod helps parents decide, in seconds, whether a book suits their child. Scan
 > **Just want to use it?** [booknod.ca](https://booknod.ca) is the ready-made version, with nothing to set up.
 > This repository is for people who want to run their own copy.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/oseunadetunji/booknod)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/OWNER/booknod)
 
 ## What it does
 
@@ -17,6 +17,7 @@ BookNod helps parents decide, in seconds, whether a book suits their child. Scan
 - **Shared ratings cache:** once any family checks a book, everyone else gets the saved answer instantly, at no AI cost.
 - **Optional payments:** a free daily allowance, yearly and monthly subscriptions and pay-as-you-go check packs through Stripe Payment Links, plus a tip link. Set your own prices.
 - **Protection against abuse:** invisible Cloudflare Turnstile bot check, per-phone and per-address limits, daily caps.
+- **Report a rating:** parents can flag a rating that looks wrong; you review it on the stats page and clear the saved answer.
 - **Private stats page** at `/stats`: checks, AI cost, sales, active phones, cities, devices, busiest hours, most-checked and not-found books. Totals only.
 
 It runs as a single **Cloudflare Worker** (the free plan is enough to start) using **Claude** from Anthropic to rate books, and **Open Library** to look up ISBNs.
@@ -66,6 +67,7 @@ All settings live in the Cloudflare dashboard (**Settings → Variables and Secr
 | `ANTHROPIC_API_KEY` | Secret | **Required.** Rates books. Set a monthly spend limit in the Anthropic Console. |
 | `MODEL` | Text | Claude model (default `claude-sonnet-5-5`). |
 | `FREE_PER_DAY` | Text | Free checks per phone per day (default `1`). Days roll over at midnight in the time zone set by `TZ` in `src/worker.js`. |
+| `FIRST_DAY_FREE` | Text | Free checks on a phone's first day, so new visitors can try it properly (default `3`). |
 | `STRIPE_SECRET_KEY` | Secret | Restricted key with **read** access to Checkout Sessions and Subscriptions. |
 | `PASS_YEARLY_URL`, `PASS_YEARLY_PRICE` | Text | Stripe Payment Link for a yearly subscription, and its button label (e.g. `$50/year`). |
 | `PASS_MONTHLY_URL`, `PASS_MONTHLY_PRICE` | Text | Same for monthly (e.g. `$5/month`). |
