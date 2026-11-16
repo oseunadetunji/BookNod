@@ -1,7 +1,7 @@
 // BookNod: check a children's book against a family's own content rules.
 // Copyright 2026 BookNod. Licensed under the Functional Source License 1.1, Apache 2.0 Future License (see LICENSE).
 //
-// One Cloudflare Worker serves the app (bundled from public/ by build.mjs) and its API.
+// One Cloudflare Worker serves the landing page (/), the app (/app; bundled from public/ by build.mjs) and its API.
 // Every setting lives in your Cloudflare dashboard, never in this file. See README.md for the full list.
 //
 // Required:  ANTHROPIC_API_KEY (secret), a KV namespace bound as BOOKNOD_KV.
@@ -63,6 +63,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
+    // The app lives at /app; the landing page is at /. Payment links and old bookmarks that still
+    // point at /?session_id=… or /?partner=… are sent on to the app, query string and all.
+    if (p === '/' && (url.searchParams.has('session_id') || url.searchParams.has('partner'))) {
+      return Response.redirect(url.origin + '/app' + url.search, 302);
+    }
     if (p.startsWith('/api/')) {
       const origin = request.headers.get('origin');
       if (origin && origin !== url.origin) return json({ error: 'forbidden' }, 403);
@@ -85,7 +90,7 @@ export default {
     }
     // Private pages kept in KV rather than in the code, e.g. a partner preview at /wpl stored under the key "page:wpl".
     const page = /^\/([a-z0-9-]{2,30})\/?$/.exec(p);
-    if (page && !['privacy', 'terms', 'stats'].includes(page[1]) && env.BOOKNOD_KV) {
+    if (page && !['privacy', 'terms', 'stats', 'app'].includes(page[1]) && env.BOOKNOD_KV) {
       const html = await env.BOOKNOD_KV.get('page:' + page[1]).catch(() => null);
       if (html) return new Response(html, { headers: {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache',
@@ -101,7 +106,8 @@ function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 function serveAsset(path, origin) {
-  if (path === '/') path = '/index.html';
+  if (path === '/') path = '/home.html';
+  if (path === '/app' || path === '/app/') path = '/index.html';
   if (path === '/privacy' || path === '/terms') path = '/privacy.html';
   if (path === '/stats') path = '/stats.html';
   const a = ASSETS[path] || ASSETS['/index.html']; // partner links like /mylib get the app too
