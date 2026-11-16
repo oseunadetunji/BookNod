@@ -11,8 +11,12 @@
 // Limits:    FREE_PER_DAY (1), FIRST_DAY_FREE (3, a new phone's first day), RATE_LIMIT_PER_HOUR (40), IP_LIMIT_PER_HOUR (60), DAILY_CAP, CHECK_LIMITER binding.
 // Bot check: TURNSTILE_SITE_KEY + TURNSTILE_SECRET (secret).
 // Other:     MODEL, TIP_URL, CONTACT_EMAIL, OPERATOR, STATS_KEY (secret, 12+ characters), PARTNERS_JSON.
+// Pilot form: requests are listed on /stats and, with the PILOT_EMAIL send_email binding (wrangler.toml), emailed
+//            to PILOT_TO (a verified Email Routing destination, e.g. your Gmail; set it in the dashboard so it
+//            stays out of this public repo). PILOT_FROM (default pilot@booknod.ca).
 // Local testing only: MOCK=1 returns sample ratings and fakes payments. Never set it on a live site.
 
+import { EmailMessage } from 'cloudflare:email';
 const ASSETS = __ASSETS__; // filled in by build.mjs
 
 // ---- Partner editions ------------------------------------------------------
@@ -79,6 +83,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (p === '/api/check') return await check(request, body, env, ctx, url);
         if (p === '/api/report') return await report(request, body, env);
+        if (p === '/api/pilot') return await pilot(request, body, env);
         if (p === '/api/stats/clear') return await statsClear(request, body, env, url);
         if (p === '/api/pass/claim') return await claimPass(body, env, ctx);
         if (p === '/api/pass/redeem') return await redeemPass(request, body, env, ctx);
@@ -498,7 +503,8 @@ async function stats(request, env) {
   }
   const num = v => parseFloat(String(v || '').replace(/[^\d.]/g, '')) || 0;
   const reports = ((await kvGet(env, 'rep:list')) || []).map(({ cks, ...r }) => ({ ...r, clearable: cks.length > 0 }));
-  return json({ days, notFound, reports, model: env.MODEL || 'claude-sonnet-5-5',
+  const pilots = (await kvGet(env, 'pilot:list')) || [];
+  return json({ days, notFound, reports, pilots, model: env.MODEL || 'claude-sonnet-5-5',
     prices: { yearly: num(env.PASS_YEARLY_PRICE), monthly: num(env.PASS_MONTHLY_PRICE), pack: num(env.PACK_PRICE) } });
 }
 
@@ -532,6 +538,11 @@ async function report(request, body, env) {
 async function statsClear(request, body, env, url) {
   const denied = await statsAuth(request, env);
   if (denied) return denied;
+  if (body.pilot) { // "Done" on a pilot request
+    const pl = (await kvGet(env, 'pilot:list')) || [];
+    await kvPut(env, 'pilot:list', pl.filter(x => x.id !== body.pilot), 730 * 86400);
+    return json({ ok: true });
+  }
   const list = (await kvGet(env, 'rep:list')) || [];
   const r = list.find(x => x.id === body.id);
   if (!r) return json({ error: 'not_found' }, 404);
@@ -541,6 +552,37 @@ async function statsClear(request, body, env, url) {
   }
   await kvPut(env, 'rep:list', list.filter(x => x.id !== r.id), 365 * 86400);
   return json({ ok: true, cleared: r.cks.length });
+}
+
+// ---- Pilot requests (landing page form) -----------------------------------------
+// A library or school asks for a 30-day pilot. Saved for /stats and, if the PILOT_EMAIL binding is set up,
+// emailed to PILOT_TO with Reply-To set to the sender. Nothing else about the sender is kept.
+const oneLine = (v, n) => String(v || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, n);
+async function pilot(request, body, env) {
+  if (body.website) return json({ ok: true }); // hidden field only bots fill in
+  const name = oneLine(body.name, 100), org = oneLine(body.org, 150), email = oneLine(body.email, 160);
+  const message = String(body.message || '').trim().slice(0, 1000);
+  if (!name || !org || !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]{2,}$/.test(email)) return json({ error: 'bad_request' }, 400);
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const rk = `pr:${(await sha(ip)).slice(0, 24)}:${new Date().toISOString().slice(0, 13)}`;
+  const n = (await kvGet(env, rk)) || 0;
+  if (n >= 5) return json({ error: 'too_many' }, 429);
+  await kvPut(env, rk, n + 1, 7200);
+  const entry = { id: crypto.randomUUID().slice(0, 12), when: today() + ' ' + torontoHM(), name, org, email, message };
+  const list = (await kvGet(env, 'pilot:list')) || [];
+  await kvPut(env, 'pilot:list', [entry, ...list].slice(0, 300), 730 * 86400);
+  if (env.PILOT_EMAIL && env.PILOT_TO) {
+    try {
+      const from = env.PILOT_FROM || 'pilot@booknod.ca', to = env.PILOT_TO;
+      const subject = `=?UTF-8?B?${btoa(String.fromCharCode(...new TextEncoder().encode('Pilot request: ' + org)))}?=`;
+      const text = `New 30-day pilot request from booknod.ca\n\nName: ${name}\nOrganization: ${org}\nEmail: ${email}\n\n${message || '(no message)'}\n\nReply to this email to answer them. All requests are also on /stats.`;
+      const raw = [`From: BookNod <${from}>`, `To: ${to}`, `Reply-To: ${email}`, `Subject: ${subject}`,
+        `Message-ID: <${crypto.randomUUID()}@booknod.ca>`, `Date: ${new Date().toUTCString()}`, 'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: 8bit', '', text].join('\r\n');
+      await env.PILOT_EMAIL.send(new EmailMessage(from, to, raw));
+    } catch (e) { console.log('pilot email failed', e && e.message); }
+  }
+  return json({ ok: true });
 }
 
 // ---- Bot check (Cloudflare Turnstile) ---------------------------------------
