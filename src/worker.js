@@ -83,6 +83,15 @@ export default {
         return json({ error: 'busy' }, 500);
       }
     }
+    // Private pages kept in KV rather than in the code, e.g. a partner preview at /wpl stored under the key "page:wpl".
+    const page = /^\/([a-z0-9-]{2,30})\/?$/.exec(p);
+    if (page && !['privacy', 'terms', 'stats'].includes(page[1]) && env.BOOKNOD_KV) {
+      const html = await env.BOOKNOD_KV.get('page:' + page[1]).catch(() => null);
+      if (html) return new Response(html, { headers: {
+        'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache',
+        'x-robots-tag': 'noindex, nofollow', 'x-content-type-options': 'nosniff', 'referrer-policy': 'strict-origin-when-cross-origin',
+      } });
+    }
     return serveAsset(p, url.origin);
   },
 };
