@@ -19,5 +19,11 @@ command = "node build.mjs"
 binding = "BOOKNOD_KV"
 id = "c38db6f083984562a06165f7f6f7ba37"
 
+# Email each 30-day pilot request (requests are also listed on /stats).
+# Sends through Cloudflare Email Routing to PILOT_TO, a Text variable set in the dashboard
+# (Settings → Variables and Secrets) to a verified Email Routing destination address, so it stays out of this repo.
+[[send_email]]
+name = "PILOT_EMAIL"
+
 [observability]
 enabled = true
