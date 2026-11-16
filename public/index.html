@@ -9,7 +9,7 @@
 <meta property="og:site_name" content="BookNod">
 <meta property="og:title" content="BookNod: scan a book, get a nod or a no">
 <meta property="og:description" content="Check any children's book against your own rules for each child, right at the library shelf.">
-<meta property="og:url" content="__ORIGIN__/">
+<meta property="og:url" content="__ORIGIN__/app">
 <meta property="og:image" content="__ORIGIN__/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -325,7 +325,7 @@ input:focus,textarea:focus{border-color:var(--cloth);outline:none}
 <script>
 const API='/api/check';
 /* ---------- Device, pass, partner ---------- */
-const PARTNER_SLUG=window.BOOKNOD_PARTNER!==undefined?window.BOOKNOD_PARTNER:(location.pathname.split('/').filter(Boolean)[0]||'').toLowerCase().replace(/[^a-z0-9-]/g,'')||null;
+const PARTNER_SLUG=window.BOOKNOD_PARTNER!==undefined?window.BOOKNOD_PARTNER:(location.pathname.split('/').filter(Boolean).filter(x=>x!=='app')[0]||'').toLowerCase().replace(/[^a-z0-9-]/g,'')||null;
 let CFG={freePerDay:1,plans:[],pack:null,manageUrl:'',tipUrl:'',partner:null};
 function planButtons(){
   return (CFG.plans||[]).map((pl,i)=>`<a class="btn ${i===0?'btn-main':'btn-ghost'} plan" href="${esc(pl.url)}">

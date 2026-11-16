@@ -2,7 +2,7 @@
   "name": "BookNod",
   "short_name": "BookNod",
   "description": "Scan a book. Get a nod, or a no.",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F3F6F2",
