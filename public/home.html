@@ -226,10 +226,36 @@ details summary::-webkit-details-marker{display:none}
 <p style="margin: 0 0 12px; font-weight: 700; color: #0F6B5C; letter-spacing: 1px; font-size: 13px">FOR LIBRARIES, SCHOOLS &amp; SCHOOL BOARDS</p>
 <h2 style="margin: 0; font-size: clamp(32px, 4vw, 48px); letter-spacing: -1px; font-weight: 800">Give every family in your community BookNod.</h2>
 <p style="margin: 16px 0 0; font-size: 18px; color: #3D4A63">A partner edition puts your name and colours on BookNod and makes it unlimited for the families you serve. You pay one yearly fee; they never see a paywall.</p>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px">
-<a href="mailto:hello@booknod.ca?subject=BookNod%2030-day%20pilot" style="background: #14213D; color: #FFFFFF; text-decoration: none; padding: 16px 28px; border-radius: 999px; font-weight: 600; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center">Start a 30-day pilot</a>
-<a href="mailto:hello@booknod.ca" style="color: #14213D; text-decoration: none; padding: 16px 8px; font-weight: 600; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center">or write to hello@booknod.ca</a>
-</div>
+<form id="pilot" novalidate style="margin-top: 32px; background: #FFFFFF; border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 0 #E1E6ED">
+<h3 style="margin: 0; font-size: 22px; font-weight: 700">Start a 30-day pilot</h3>
+<label style="display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 15px">Your name
+<input name="name" required autocomplete="name" maxlength="100" style="font: inherit; font-weight: 400; padding: 12px 14px; min-height: 48px; box-sizing: border-box; border: 1.5px solid #C9D3DD; border-radius: 12px; color: #14213D"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 15px">Library, school or school board
+<input name="org" required autocomplete="organization" maxlength="150" style="font: inherit; font-weight: 400; padding: 12px 14px; min-height: 48px; box-sizing: border-box; border: 1.5px solid #C9D3DD; border-radius: 12px; color: #14213D"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 15px">Work email
+<input name="email" type="email" required autocomplete="email" maxlength="160" style="font: inherit; font-weight: 400; padding: 12px 14px; min-height: 48px; box-sizing: border-box; border: 1.5px solid #C9D3DD; border-radius: 12px; color: #14213D"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 15px">Anything we should know? <span style="font-weight: 400; color: #4A5568; font-size: 14px">Optional</span>
+<textarea name="message" rows="3" maxlength="1000" style="font: inherit; font-weight: 400; padding: 12px 14px; box-sizing: border-box; border: 1.5px solid #C9D3DD; border-radius: 12px; color: #14213D; resize: vertical"></textarea></label>
+<div aria-hidden="true" style="position: absolute; left: -9999px"><label>Leave empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+<button type="submit" style="font: inherit; font-weight: 600; font-size: 17px; background: #14213D; color: #FFFFFF; border: 0; border-radius: 999px; padding: 14px 28px; min-height: 52px; cursor: pointer; align-self: flex-start">Request a pilot</button>
+<p id="pilotMsg" role="status" aria-live="polite" style="margin: 0; font-size: 15px; color: #3D4A63">Prefer email? Write to <a href="mailto:hello@booknod.ca">hello@booknod.ca</a>.</p>
+</form>
+<script>
+(function(){
+  var f=document.getElementById('pilot'), msg=document.getElementById('pilotMsg'), btn=f.querySelector('button');
+  f.addEventListener('submit', function(e){
+    e.preventDefault();
+    var d={name:f.name.value.trim(), org:f.org.value.trim(), email:f.email.value.trim(), message:f.message.value.trim(), website:f.website.value};
+    if(!d.name||!d.org||!f.email.checkValidity()||!d.email){msg.style.color='#B42318';msg.textContent='Please fill in your name, organization and a valid email.';return}
+    btn.disabled=true; btn.textContent='Sending…';
+    fetch('/api/pilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(d)})
+      .then(function(r){if(!r.ok)throw r.status;
+        f.innerHTML='<h3 style="margin:0;font-size:22px;font-weight:700">Thanks, '+d.name.replace(/[<>&"]/g,'')+'!</h3><p style="margin:0;color:#3D4A63">Your pilot request is in. We\'ll be in touch at '+d.email.replace(/[<>&"]/g,'')+' soon.</p>';})
+      .catch(function(s){btn.disabled=false;btn.textContent='Request a pilot';msg.style.color='#B42318';
+        msg.innerHTML=s===429?'Too many requests from this network. Please email <a href="mailto:hello@booknod.ca">hello@booknod.ca</a>.':'Something went wrong. Please try again, or email <a href="mailto:hello@booknod.ca">hello@booknod.ca</a>.';});
+  });
+})();
+</script>
 </div>
 <div style="flex: 1 1 440px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px">
 <div style="background: #FFFFFF; border-radius: 20px; padding: 24px">

@@ -98,6 +98,11 @@ form.key button{border:0;border-radius:10px;padding:10px 16px;background:var(--c
     <button type="button" class="linkbtn" id="forget">Forget key on this device</button>
   </section>
   <section class="panel" style="margin-top:18px">
+    <h2>Pilot requests</h2>
+    <p class="note">From the form on the home page. <b>Done</b> removes a request once you've replied.</p>
+    <div class="scroll"><table id="pilotTable"></table></div>
+  </section>
+  <section class="panel" style="margin-top:18px">
     <h2>Reported ratings</h2>
     <p class="note">Parents flagged these. <b>Clear rating</b> deletes the saved answer, so the next check asks the AI again. If the rating still looks wrong after that, the AI may simply not know the book well.</p>
     <div class="scroll"><table id="repTable"></table></div>
@@ -114,7 +119,7 @@ form.key button{border:0;border-radius:10px;padding:10px 16px;background:var(--c
 const $=id=>document.getElementById(id);
 const COST_TEXT=0.007, COST_PHOTO=0.01;
 let PRICES={yearly:0,monthly:0,pack:0};
-let days=[], range=7, notFound=[], reports=[];
+let days=[], range=7, notFound=[], reports=[], pilots=[];
 const getKey=()=>{try{return localStorage.getItem('booknod.statskey')||''}catch(e){return ''}};
 const setKey=k=>{try{k?localStorage.setItem('booknod.statskey',k):localStorage.removeItem('booknod.statskey')}catch(e){}};
 const n=(d,f)=>d[f]||0;
@@ -129,7 +134,7 @@ async function load(){
     if(r.status===403){setKey('');showErr('That key is wrong. Check STATS_KEY in Cloudflare.');return}
     if(r.status===404){showErr('Stats aren\'t set up yet. Add a STATS_KEY secret (12+ characters) in Cloudflare and deploy.');return}
     if(!r.ok) throw 0;
-    const data=await r.json(); if(data.prices)PRICES=data.prices; days=data.days.reverse(); notFound=data.notFound||[]; reports=data.reports||[];
+    const data=await r.json(); if(data.prices)PRICES=data.prices; days=data.days.reverse(); notFound=data.notFound||[]; reports=data.reports||[]; pilots=data.pilots||[];
     $('login').hidden=true;$('dash').hidden=false;render();
   }catch(e){showErr("Couldn't load stats. Check your connection and reload.")}
 }
@@ -174,7 +179,7 @@ function render(){
     ['Sales',fmt(py+pm+pp),`${fmt(py)} yearly · ${fmt(pm)} monthly · ${fmt(pp)} packs · ${money(py*PRICES.yearly+pm*PRICES.monthly+pp*PRICES.pack)} CAD new`],
     ['Blocked',fmt(sum(list,'botblocked')+sum(list,'ratelimited')),`${fmt(sum(list,'botblocked'))} failed bot check · ${fmt(sum(list,'ratelimited'))} over limits`],
   ].map(([l,b,s])=>`<div class="tile"><div class="lbl">${l}, ${label}</div><div class="big">${b}</div><div class="sub">${s}</div></div>`).join('');
-  drawPeople(list);drawChart();drawTable();drawNotFound();drawReports();
+  drawPeople(list);drawChart();drawTable();drawNotFound();drawReports();drawPilots();
 }
 function drawChart(){
   const W=900,H=220,L=36,R=8,T=10,B=28, w=(W-L-R)/days.length;
@@ -199,6 +204,20 @@ function drawTable(){
 }
 const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const CHOICE={wrong_book:'Wrong book',too_low:'Rating too low',too_high:'Rating too high',other:'Other'};
+function drawPilots(){
+  if(!pilots.length){$('pilotTable').innerHTML='<tbody><tr><td class="note" style="text-align:left">No pilot requests yet.</td></tr></tbody>';return}
+  $('pilotTable').innerHTML=`<thead><tr><th>When</th><th>Organization</th><th>Name</th><th>Email</th><th>Message</th><th></th></tr></thead><tbody>${pilots.map(p=>`<tr>
+    <td>${escH(p.when)}</td><td style="text-align:left;white-space:normal"><b>${escH(p.org)}</b></td><td style="text-align:left">${escH(p.name)}</td>
+    <td style="text-align:left"><a href="mailto:${encodeURIComponent(p.email).replace(/%40/g,'@')}?subject=${encodeURIComponent('Your BookNod pilot')}">${escH(p.email)}</a></td>
+    <td style="text-align:left;white-space:normal">${escH(p.message)||'·'}</td>
+    <td><button type="button" class="clr" data-pid="${escH(p.id)}">Done</button></td></tr>`).join('')}</tbody>`;
+  $('pilotTable').querySelectorAll('.clr').forEach(b=>b.onclick=async()=>{
+    b.disabled=true;
+    try{const r=await fetch('/api/stats/clear',{method:'POST',headers:{'content-type':'application/json','x-stats-key':getKey()},body:JSON.stringify({pilot:b.dataset.pid})});
+      if(!r.ok)throw 0;pilots=pilots.filter(x=>x.id!==b.dataset.pid);drawPilots();
+    }catch(e){b.disabled=false;b.textContent='Try again'}
+  });
+}
 function drawReports(){
   if(!reports.length){$('repTable').innerHTML='<tbody><tr><td class="note" style="text-align:left">No reports. Good news.</td></tr></tbody>';return}
   $('repTable').innerHTML=`<thead><tr><th>Last report</th><th>Book</th><th>What's off</th><th>Notes</th><th></th></tr></thead><tbody>${reports.map(r=>`<tr>
